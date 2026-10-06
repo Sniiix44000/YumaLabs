@@ -294,7 +294,7 @@ on_error()
 
     if [[ "${BACKUP_STATUS}" != "SUCCESS" ]]; then
 
-        ERROR_MESSAGE="${ERROR_MESSAGE:-Erreur lors de l'exécution du backup.}"
+        ERROR_MESSAGE="${ERROR_MESSAGE:-Erreur lors du backup.}"
 
         error "BACKUP FAILED"
         error "${ERROR_MESSAGE}"
@@ -995,9 +995,9 @@ create_archive()
         -C "${WORK_DIR}" inventory \
         -C "${WORK_DIR}" MANIFEST.txt \
         | zstd \
-            --threads="${ZSTD_THREADS}" \
-            --compression-level="${ZSTD_LEVEL}" \
-            --output="${ARCHIVE}"
+            -T"${ZSTD_THREADS}" \
+            -"${ZSTD_LEVEL}" \
+            -o "${ARCHIVE}"
 
     chmod 600 "${ARCHIVE}"
 
