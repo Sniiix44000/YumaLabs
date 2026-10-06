@@ -16,12 +16,10 @@ Le script sauvegarde notamment :
 - Base SQLite `config.db`
 - Dump SQLite de `config.db`
 - Vérification d'intégrité SQLite
+- Rapport `pvereport`
 - Configuration réseau
-- Interfaces réseau et routage
 - Configuration iSCSI
-- Sessions iSCSI
 - Configuration multipath
-- État multipath
 - Configuration APT
 - Certificats SSL
 - Certificats privés Proxmox
@@ -33,17 +31,6 @@ Le script sauvegarde notamment :
 - `fstab`
 - Cron
 - Logrotate
-- Inventaire matériel
-- CPU / RAM
-- PCI
-- Disques / contrôleurs
-- LVM
-- ZFS si présent
-- Ceph si présent
-- Services systemd
-- Paquets installés
-- Paquets installés manuellement
-- État des VM et CT
 
 Le script génère également :
 
@@ -103,33 +90,14 @@ hostname
 date
 mountpoint
 sqlite3
+pvereport
 logger
 mktemp
 cp
 tee
 ```
 
-Selon la configuration du serveur, les commandes suivantes peuvent également être utilisées :
-
-```text
-pveversion
-pvesh
-qm
-pct
-lspci
-lsblk
-lscpu
-pvs
-vgs
-lvs
-iscsiadm
-multipath
-zpool
-zfs
-ceph
-```
-
-Les commandes optionnelles ne provoquent pas d'échec si elles ne sont pas présentes.
+`pvereport` est nécessaire pour générer le rapport inclus dans l'archive.
 
 ---
 
@@ -998,17 +966,6 @@ Les éléments suivants sont sauvegardés lorsqu'ils existent :
 /etc/systemd/resolved.conf
 ```
 
-Le script collecte également :
-
-```bash
-ip -details address
-ip -details link
-ip route
-ip rule
-```
-
-Ces informations permettent de reconstruire l'état réseau du serveur.
-
 ---
 
 # iSCSI
@@ -1017,12 +974,6 @@ Les configurations iSCSI sont sauvegardées notamment depuis :
 
 ```text
 /etc/iscsi
-```
-
-Le script collecte également les sessions iSCSI actives lorsque `iscsiadm` est disponible :
-
-```bash
-iscsiadm -m session
 ```
 
 ---
@@ -1034,12 +985,6 @@ La configuration suivante est sauvegardée :
 ```text
 /etc/multipath.conf
 /etc/multipath
-```
-
-L'état multipath est également collecté :
-
-```bash
-multipath -ll
 ```
 
 ---
@@ -1085,36 +1030,16 @@ Les sauvegardes doivent donc être stockées dans un emplacement sécurisé avec
 
 ---
 
-# Inventaire matériel
+# Rapport Proxmox
 
-Le script collecte notamment :
+Le script exécute la commande Proxmox `pvereport` et enregistre sa sortie dans :
 
 ```text
-CPU
-RAM
-PCI
-Disques
-Contrôleurs
-Interfaces réseau
-LVM
-ZFS
-Ceph
-Modules kernel
+inventory/pvereport.txt
 ```
 
-Exemples de commandes :
-
-```bash
-lscpu
-lspci -nnk
-lsblk
-pvs
-vgs
-lvs
-lsmod
-```
-
-Cela permet d'avoir une photographie du matériel et de l'état du système au moment de la sauvegarde.
+La génération du rapport est requise : si `pvereport` échoue, la sauvegarde échoue
+également afin de ne pas produire une archive incomplète.
 
 ---
 
@@ -1126,9 +1051,8 @@ Exemple :
 
 ```text
 etc/
-var/
-inventory/
-manifest/
+inventory/pvereport.txt
+MANIFEST.txt
 pve-cluster/
 ```
 
@@ -1137,7 +1061,6 @@ Le manifeste permet notamment d'identifier :
 - le serveur
 - la date de sauvegarde
 - la version du script
-- la version Proxmox
 - le nombre de threads ZSTD configuré
 - le contenu sauvegardé
 - le fait que les disques VM/CT ne sont pas inclus
@@ -1517,7 +1440,7 @@ systemd timer / cron
 proxmox-node-backup.sh
         │
         ├── Collecte configuration
-        ├── Collecte inventaire
+        ├── Rapport pvereport
         ├── SQLite dump
         ├── SQLite integrity check
         ├── TAR

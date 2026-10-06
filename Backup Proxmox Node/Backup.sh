@@ -342,6 +342,7 @@ require_commands()
         hostname
         date
         mountpoint
+        pvereport
         sqlite3
         logger
         mktemp
@@ -417,210 +418,28 @@ copy_if_exists()
 }
 
 # ==============================================================================
-# INVENTORY
+# INVENTORY REPORT
 # ==============================================================================
 
-collect_inventory()
+generate_inventory_report()
 {
-    log "Collecte de l'inventaire système..."
+    log "Génération du rapport pvereport..."
 
     mkdir -p "${INVENTORY_DIR}"
 
-    # --------------------------------------------------------------------------
-    # Proxmox
-    # --------------------------------------------------------------------------
-
-    {
-        echo "===== HOSTNAME ====="
-        hostname
-
-        echo
-        echo "===== DATE ====="
-        date --iso-8601=seconds
-
-        echo
-        echo "===== PVE VERSION ====="
-        pveversion -v 2>&1 || true
-
-    } > "${INVENTORY_DIR}/proxmox.txt"
-
-    # --------------------------------------------------------------------------
-    # Kernel / CPU / mémoire
-    # --------------------------------------------------------------------------
-
-    uname -a \
-        > "${INVENTORY_DIR}/uname.txt" 2>&1 || true
-
-    lscpu \
-        > "${INVENTORY_DIR}/lscpu.txt" 2>&1 || true
-
-    free -h \
-        > "${INVENTORY_DIR}/memory.txt" 2>&1 || true
-
-    cp -a /proc/cpuinfo \
-        "${INVENTORY_DIR}/proc-cpuinfo" \
-        2>/dev/null || true
-
-    cp -a /proc/meminfo \
-        "${INVENTORY_DIR}/proc-meminfo" \
-        2>/dev/null || true
-
-    # --------------------------------------------------------------------------
-    # PCI / hardware
-    # --------------------------------------------------------------------------
-
-    lspci -nnk \
-        > "${INVENTORY_DIR}/lspci.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # Disques / fichiersystems
-    # --------------------------------------------------------------------------
-
-    lsblk \
-        -e7 \
-        -o NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,UUID,MODEL,SERIAL \
-        > "${INVENTORY_DIR}/lsblk.txt" 2>&1 || true
-
-    df -hT \
-        > "${INVENTORY_DIR}/df.txt" 2>&1 || true
-
-    mount \
-        > "${INVENTORY_DIR}/mount.txt" 2>&1 || true
-
-    findmnt \
-        > "${INVENTORY_DIR}/findmnt.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # Réseau
-    # --------------------------------------------------------------------------
-
-    ip -details address \
-        > "${INVENTORY_DIR}/ip-address.txt" 2>&1 || true
-
-    ip -details link \
-        > "${INVENTORY_DIR}/ip-link.txt" 2>&1 || true
-
-    ip route \
-        > "${INVENTORY_DIR}/ip-route.txt" 2>&1 || true
-
-    ip rule \
-        > "${INVENTORY_DIR}/ip-rule.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # LVM
-    # --------------------------------------------------------------------------
-
-    pvs \
-        > "${INVENTORY_DIR}/pvs.txt" 2>&1 || true
-
-    vgs \
-        > "${INVENTORY_DIR}/vgs.txt" 2>&1 || true
-
-    lvs -a -o +devices \
-        > "${INVENTORY_DIR}/lvs.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # Proxmox Storage
-    # --------------------------------------------------------------------------
-
-    pvesm status \
-        > "${INVENTORY_DIR}/pvesm-status.txt" 2>&1 || true
-
-    pvesh get /nodes \
-        > "${INVENTORY_DIR}/pvesh-nodes.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # VM / CT inventory uniquement
-    #
-    # ATTENTION :
-    # aucune donnée de disque VM/CT n'est copiée.
-    # --------------------------------------------------------------------------
-
-    qm list \
-        > "${INVENTORY_DIR}/qm-list.txt" 2>&1 || true
-
-    pct list \
-        > "${INVENTORY_DIR}/pct-list.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # Systemd
-    # --------------------------------------------------------------------------
-
-    systemctl --failed \
-        > "${INVENTORY_DIR}/systemd-failed.txt" 2>&1 || true
-
-    systemctl list-unit-files --state=enabled \
-        > "${INVENTORY_DIR}/systemd-enabled.txt" 2>&1 || true
-
-    systemctl list-units --all \
-        > "${INVENTORY_DIR}/systemd-units.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # Kernel
-    # --------------------------------------------------------------------------
-
-    lsmod \
-        > "${INVENTORY_DIR}/lsmod.txt" 2>&1 || true
-
-    dmesg \
-        > "${INVENTORY_DIR}/dmesg.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # Packages
-    # --------------------------------------------------------------------------
-
-    dpkg-query \
-        -W \
-        -f='${binary:Package}\t${Version}\n' \
-        > "${INVENTORY_DIR}/dpkg-packages.txt" 2>&1 || true
-
-    apt-mark showmanual \
-        > "${INVENTORY_DIR}/apt-manual.txt" 2>&1 || true
-
-    # --------------------------------------------------------------------------
-    # ZFS
-    # --------------------------------------------------------------------------
-
-    if command -v zpool >/dev/null 2>&1; then
-
-        zpool status \
-            > "${INVENTORY_DIR}/zpool-status.txt" 2>&1 || true
-
-        zpool list \
-            > "${INVENTORY_DIR}/zpool-list.txt" 2>&1 || true
-
-        zfs list \
-            > "${INVENTORY_DIR}/zfs-list.txt" 2>&1 || true
+    if ! pvereport > "${INVENTORY_DIR}/pvereport.txt"; then
+        ERROR_MESSAGE="La génération du rapport pvereport a échoué."
+        error "${ERROR_MESSAGE}"
+        return 1
     fi
 
-    # --------------------------------------------------------------------------
-    # Ceph
-    # --------------------------------------------------------------------------
-
-    if command -v ceph >/dev/null 2>&1; then
-
-        ceph -s \
-            > "${INVENTORY_DIR}/ceph-status.txt" 2>&1 || true
-
-        ceph osd tree \
-            > "${INVENTORY_DIR}/ceph-osd-tree.txt" 2>&1 || true
+    if [[ ! -s "${INVENTORY_DIR}/pvereport.txt" ]]; then
+        ERROR_MESSAGE="La commande pvereport n'a produit aucun rapport."
+        error "${ERROR_MESSAGE}"
+        return 1
     fi
 
-    # --------------------------------------------------------------------------
-    # iSCSI / multipath état
-    # --------------------------------------------------------------------------
-
-    if command -v iscsiadm >/dev/null 2>&1; then
-
-        iscsiadm -m session \
-            > "${INVENTORY_DIR}/iscsi-sessions.txt" 2>&1 || true
-    fi
-
-    if command -v multipath >/dev/null 2>&1; then
-
-        multipath -ll \
-            > "${INVENTORY_DIR}/multipath.txt" 2>&1 || true
-    fi
+    log "Rapport pvereport créé : ${INVENTORY_DIR}/pvereport.txt"
 }
 
 # ==============================================================================
@@ -649,14 +468,14 @@ backup_proxmox()
 
         log "Vérification de l'intégrité SQLite de config.db..."
 
-        if sqlite3 \
+        local integrity_result
+
+        if integrity_result="$(sqlite3 \
             "/var/lib/pve-cluster/config.db" \
             "PRAGMA integrity_check;" \
-            > "${INVENTORY_DIR}/config-db-integrity.txt" \
-            2>&1; then
+            2>&1)"; then
 
-            if grep -qx "ok" \
-                "${INVENTORY_DIR}/config-db-integrity.txt"; then
+            if [[ "${integrity_result}" == "ok" ]]; then
 
                 log "config.db : integrity_check OK"
 
@@ -666,7 +485,7 @@ backup_proxmox()
 
                 error "${ERROR_MESSAGE}"
 
-                cat "${INVENTORY_DIR}/config-db-integrity.txt"
+                printf '%s\n' "${integrity_result}" >&2
 
                 return 1
             fi
@@ -676,6 +495,7 @@ backup_proxmox()
             ERROR_MESSAGE="Impossible d'exécuter SQLite integrity_check."
 
             error "${ERROR_MESSAGE}"
+            printf '%s\n' "${integrity_result}" >&2
 
             return 1
         fi
@@ -929,7 +749,7 @@ Archive       : $(basename "${ARCHIVE}")
 CONTENT
 ===============================================================================
 
-This archive contains the configuration and inventory of the Proxmox node.
+This archive contains the configuration of the Proxmox node and the pvereport output.
 
 VM and CT virtual disks are NOT included.
 
@@ -950,13 +770,7 @@ Included:
 - Systemd configuration
 - Cron configuration
 - Logrotate configuration
-- LVM inventory
-- Storage inventory
-- Hardware inventory
-- Network inventory
-- Package inventory
-- ZFS inventory if present
-- Ceph inventory if present
+- Proxmox report: inventory/pvereport.txt
 
 ===============================================================================
 COMPRESSION
@@ -1197,7 +1011,6 @@ main()
     INVENTORY_DIR="${WORK_DIR}/inventory"
 
     mkdir -p "${SOURCE_DIR}"
-    mkdir -p "${INVENTORY_DIR}"
 
     log "Temporary directory : ${WORK_DIR}"
 
@@ -1205,7 +1018,7 @@ main()
     # COLLECTE
     # --------------------------------------------------------------------------
 
-    collect_inventory
+    generate_inventory_report
 
     backup_proxmox
 
