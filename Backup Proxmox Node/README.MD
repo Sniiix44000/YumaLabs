@@ -1,6 +1,5 @@
-import pypandoc
 
-readme = r'''# Proxmox Node Backup
+ProxBackup Node
 
 Script Bash permettant de sauvegarder la **configuration complète d'un nœud Proxmox VE**, sans sauvegarder les disques des VM ou des conteneurs.
 
